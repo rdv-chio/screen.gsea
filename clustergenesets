@@ -37,7 +37,7 @@ clustergenesets = function(input,merge.threshold = .10,output='') {
 		new.row[new.row == 2] = 1
 		new.rowname = paste(rownames(new.matrix)[min.row],rownames(new.matrix)[min.col],sep='; ')
 		report[count] = list(c(
-				rownames(new.matrix)[min.col],rownames(new.matrix)[min.row], ## names of genesets A and B
+				new.rowname,rownames(new.matrix)[min.col],rownames(new.matrix)[min.row], ## names of new geneset and genesets A and B
 				lengths[min.col],lengths[min.row], ## lengths of genesets A and B
 				core.matrix[min.row,min.col],core.genes, ## number of genes shared by genesets A and B and their names
 				diss.matrix[min.row,min.col],lengths[min.col]-core.matrix[min.row,min.col],lengths[min.row]-core.matrix[min.row,min.col],max.diss.matrix[min.row,min.col], ## combined, individual, and maximum dissimilarities of genesets A and B
@@ -73,5 +73,5 @@ clustergenesets = function(input,merge.threshold = .10,output='') {
 	print(paste(count,' merges performed.',sep=''))
 	names(report) = c(1:count)
 	write.table(new.matrix,paste(output,'txt',sep='.'),sep='\t')
-	write.table(t(data.frame(report,row.names = c('Geneset A','Geneset B','Length A','Length B','Core Length','Core Genes','Total Diss','Diss A','Diss B','Max Diss','Merge Coefficient','Merged Length'))),paste(output,'report','txt',sep='.'),row.names=F,sep='\t')
+	write.table(t(data.frame(report,row.names = c('New Geneset','Geneset A','Geneset B','Length A','Length B','Core Length','Core Genes','Total Diss','Diss A','Diss B','Max Diss','Merge Coefficient','Merged Length'))),paste(output,'report','txt',sep='.'),row.names=F,sep='\t')
 }
