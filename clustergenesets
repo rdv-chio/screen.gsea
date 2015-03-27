@@ -72,6 +72,6 @@ clustergenesets = function(input,merge.threshold = .10,output='') {
 	}
 	print(paste(count,' merges performed.',sep=''))
 	names(report) = c(1:count)
-	write.table(new.matrix,paste(output,'txt',sep='.'),sep='\t')
+	write.table(new.matrix,output,sep='\t')
 	write.table(t(data.frame(report,row.names = c('New Geneset','Geneset A','Geneset B','Length A','Length B','Core Length','Core Genes','Total Diss','Diss A','Diss B','Max Diss','Merge Coefficient','Merged Length'))),paste(output,'report','txt',sep='.'),row.names=F,sep='\t')
 }
