@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 open (GMT,"/home/rvidana/WestbrookLab/Bioinformatics/tingting/c2.all.v4.0.symbols.gmt");
+
 @gmt=<GMT>; close GMT;
 
 open (POOL,"/home/rvidana/WestbrookLab/Bioinformatics/datasets/shRNA/shRNA.Index.V3.genes.txt");
