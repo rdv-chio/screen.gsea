@@ -1,14 +1,25 @@
 #!/usr/bin/perl -w
-open (GMT,"/home/rvidana/WestbrookLab/Bioinformatics/tingting/c2.all.v4.0.symbols.gmt");
 
+#original GMT file from GSEA website, this iteration of this script does not need to use it, since it is used by the previous script (annotate Nick's script name)
+#open (GMT,"/home/rvidana/WestbrookLab/scripts/screen.gsea/datasets/c2.cp.v5.0.symbols.gmt");
+#@gmt=<GMT>; close GMT;
+
+#need to work on folder allocation , for now it is a manual operation
+$file=$ARGV[0];
+$folder="/home/rvidana/WestbrookLab/Bioinformatics/sarah/gsea/";
+open (GMT,"$folder$file");
 @gmt=<GMT>; close GMT;
 
-open (POOL,"/home/rvidana/WestbrookLab/Bioinformatics/datasets/shRNA/shRNA.Index.V3.genes.txt");
-#open (POOL,"/home/rvidana/WestbrookLab/Bioinformatics/tiffany/rna_seq_genes.txt");
+#list of valid genes one column, can become an argument at a later time
+open (POOL,"/home/rvidana/WestbrookLab/scripts/screen.gsea/datasets/shRNA.Index.V3.genes.txt");
 @focus_pool=<POOL>; close POOL;
 
-#open (NEWGMT,">/home/rvidana/WestbrookLab/Bioinformatics/datasets/GSEA/c2.all.v4.0.symbols.pool.4.2.gmt");
-open (NEWGMT,">/home/rvidana/WestbrookLab/Bioinformatics/datasets/GSEA/c2.all.v4.0.symbols.ngs.gmt");
+$length_file=length($file)-4;
+$no_extension=substr($file,0,$length_file);
+$newfile="$no_extension.pool.gmt";
+
+#new files generated
+open (NEWGMT,">$folder$newfile");
 
 foreach $pathway(@gmt)
 {
