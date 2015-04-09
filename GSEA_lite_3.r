@@ -1,4 +1,4 @@
-GSEA_lite_2 <- function(input.ds, gs.db, nperm = 1000, fdr.q.val.threshold = 0.1, output.directory = '', doc.string='GSEA.analysis', weighted.score.type=0) {
+GSEA_lite_3 <- function(input.ds, gs.db, nperm = 1000, fdr.q.val.threshold = 0.1, output.directory = '', doc.string='GSEA.analysis', weighted.score.type=0) {
  
 # Read input gene list (must be stored as data.frame)
 
@@ -83,7 +83,7 @@ GSEA_lite_2 <- function(input.ds, gs.db, nperm = 1000, fdr.q.val.threshold = 0.1
 		geneset <- geneset.matrix[i,geneset.matrix[i,] != "null"]
 		geneset.indexes <- vector(length=length(geneset), mode = "numeric")
 		geneset.indexes <- match(geneset, dataset.genes)
-		GSEA.results <- GSEA_ES_lite_2(gene.list=dataset.indexes, gene.set=geneset.indexes, weighted.score.type, correl.vector=dataset.effects)
+		GSEA.results <- GSEA_ES_lite_3(gene.list=dataset.indexes, gene.set=geneset.indexes, weighted.score.type, correl.vector=dataset.effects)
 		obs.ES[i] <- GSEA.results$ES
 		obs.arg.ES[i] <- GSEA.results$arg.ES
 		obs.RES[i,] <- GSEA.results$RES
@@ -105,10 +105,10 @@ GSEA_lite_2 <- function(input.ds, gs.db, nperm = 1000, fdr.q.val.threshold = 0.1
 		geneset.indexes <- match(geneset, dataset.genes)
 		for (r in 1:nperm) {
 			reshuffled.dataset.indexes <- sample(1:dataset.genes.N)
-			GSEA.results <- GSEA_ES_lite_2(gene.list=reshuffled.dataset.indexes, gene.set=geneset.indexes, weighted.score.type, correl.vector=dataset.effects)   
+			GSEA.results <- GSEA_ES_lite_3(gene.list=reshuffled.dataset.indexes, gene.set=geneset.indexes, weighted.score.type, correl.vector=dataset.effects)   
 			phi[i, r] <- GSEA.results$ES
 		}
-		GSEA.results <- GSEA_ES_lite_2(gene.list=dataset.indexes, gene.set=geneset.indexes, weighted.score.type, correl.vector=dataset.effects)
+		GSEA.results <- GSEA_ES_lite_3(gene.list=dataset.indexes, gene.set=geneset.indexes, weighted.score.type, correl.vector=dataset.effects)
 		obs.phi[i, 1] <- GSEA.results$ES
 		for (r in 2:nperm) {
 			obs.phi[i, r] <- obs.phi[i, 1]
@@ -121,35 +121,17 @@ GSEA_lite_2 <- function(input.ds, gs.db, nperm = 1000, fdr.q.val.threshold = 0.1
 
 	for (i in 1:geneset.N) {
 		pos.phi <- NULL
-		neg.phi <- NULL
 		for (j in 1:nperm) {
-			if (phi[i, j] >= 0) {
-				pos.phi <- c(pos.phi, phi[i, j])
-			} else {
-				neg.phi <- c(neg.phi, phi[i, j])
-			}
+			pos.phi <- c(pos.phi, phi[i, j])
 		}
 		pos.m <- mean(as.numeric(pos.phi))
-		neg.m <- mean(abs(as.numeric(neg.phi)))
 		for (j in 1:nperm) {
-			if (phi[i, j] >= 0) {
-				phi.norm[i, j] <- phi[i, j]/pos.m 
-			} else {
-				phi.norm[i, j] <- phi[i, j]/neg.m
-			}
+			phi.norm[i, j] <- phi[i, j]/pos.m 
 		}
 		for (j in 1:nperm) {
-			if (obs.phi[i, j] >= 0) {
-				obs.phi.norm[i, j] <- obs.phi[i, j]/pos.m
-			} else {
-				obs.phi.norm[i, j] <- obs.phi[i, j]/neg.m
-			}
+			obs.phi.norm[i, j] <- obs.phi[i, j]/pos.m
 		}
-		if (obs.ES[i] >= 0) {
-			obs.ES.norm[i] <- obs.ES[i]/pos.m
-		} else {
-			obs.ES.norm[i] <- obs.ES[i]/neg.m
-		}
+		obs.ES.norm[i] <- obs.ES[i]/pos.m
 	}
 
 # Compute FDRs 
@@ -174,17 +156,10 @@ GSEA_lite_2 <- function(input.ds, gs.db, nperm = 1000, fdr.q.val.threshold = 0.1
 		for (i in 1:nperm) {
 			phi.vec <- phi.norm[,i]
 			obs.phi.vec <- obs.phi.norm[,i]
-			if (ES.value >= 0) {
-				count.col.norm <- sum(phi.vec >= 0) # add up positive ES scores for the permuted gene list across all genesets
-				obs.count.col.norm <- sum(obs.phi.vec >= 0) # add up positive ES scores for the input gene list across all genesets
-				count.col[i] <- ifelse(count.col.norm > 0, sum(phi.vec >= ES.value)/count.col.norm, 0) # report fraction of the sum of positive ES scores for the permuted gene list across all genesets that is larger than the ES score for the input gene list for geneset[k]
-				obs.count.col[i] <- ifelse(obs.count.col.norm > 0, sum(obs.phi.vec >= ES.value)/obs.count.col.norm, 0) # report fraction of the sum of positive ES scores for the input gene list across all genesets that is larger than the ES score for the input gene list for geneset[k]
-			} else {
-				count.col.norm <- sum(phi.vec < 0)
-				obs.count.col.norm <- sum(obs.phi.vec < 0)
-				count.col[i] <- ifelse(count.col.norm > 0, sum(phi.vec <= ES.value)/count.col.norm, 0)
-				obs.count.col[i] <- ifelse(obs.count.col.norm > 0, sum(obs.phi.vec <= ES.value)/obs.count.col.norm, 0)
-			}
+			count.col.norm <- sum(phi.vec >= 0) # add up positive ES scores for the permuted gene list across all genesets
+			obs.count.col.norm <- sum(obs.phi.vec >= 0) # add up positive ES scores for the input gene list across all genesets
+			count.col[i] <- ifelse(count.col.norm > 0, sum(phi.vec >= ES.value)/count.col.norm, 0) # report fraction of the sum of positive ES scores for the permuted gene list across all genesets that is larger than the ES score for the input gene list for geneset[k]
+			obs.count.col[i] <- ifelse(obs.count.col.norm > 0, sum(obs.phi.vec >= ES.value)/obs.count.col.norm, 0) # report fraction of the sum of positive ES scores for the input gene list across all genesets that is larger than the ES score for the input gene list for geneset[k]
 		}
 		phi.norm.mean[k] <- mean(count.col) # for geneset[k] across all permutations, average the fraction of the sum of positive ES scores for the permuted gene list across all genesets that is larger than the ES score for the input gene list for geneset[k]
 		obs.phi.norm.mean[k] <- mean(obs.count.col) # for geneset[k] across all permutations, average the fraction of the sum of positive ES scores for the input gene list across all genesets that is larger than the ES score for the input gene list for geneset[k]
