@@ -19,7 +19,7 @@ GSEA_lite_3 <- function(input.ds, gs.db, nperm = 1000, fdr.q.val.threshold = 0.1
 	geneset.N <- length(genesets)
 	geneset.sizes <- vector(length = geneset.N, mode = "numeric") 
 	for (i in 1:geneset.N) {
-		geneset.sizes[i] <- length(unlist(strsplit(genesets[[i]], "\t"))) - 2
+		geneset.sizes[i] <- length(which(unlist(strsplit(genesets[[i]], "\t")) != 'null')) - 2
 	}
 	max.geneset.size <- max(geneset.sizes)      
 	geneset.matrix <- matrix(rep("null", geneset.N*max.geneset.size), nrow=geneset.N, ncol= max.geneset.size)

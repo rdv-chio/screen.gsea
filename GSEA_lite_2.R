@@ -19,7 +19,7 @@ GSEA_lite_2 <- function(input.ds, gs.db, nperm = 1000, fdr.q.val.threshold = 0.1
 	geneset.N <- length(genesets)
 	geneset.sizes <- vector(length = geneset.N, mode = "numeric") 
 	for (i in 1:geneset.N) {
-		geneset.sizes[i] <- length(unlist(strsplit(genesets[[i]], "\t"))) - 2
+		geneset.sizes[i] <- length(which(unlist(strsplit(genesets[[i]], "\t")) != 'null')) - 2
 	}
 	max.geneset.size <- max(geneset.sizes)      
 	geneset.matrix <- matrix(rep("null", geneset.N*max.geneset.size), nrow=geneset.N, ncol= max.geneset.size)
@@ -59,6 +59,22 @@ GSEA_lite_2 <- function(input.ds, gs.db, nperm = 1000, fdr.q.val.threshold = 0.1
 		}
 	}
 	geneset.matrix=geneset.good.matrix[rowSums(is.na(geneset.good.matrix))!=ncol(geneset.good.matrix),]
+	geneset.matrix.match.2=matrix(rep(NA,times=nrow(geneset.matrix)*ncol(geneset.matrix)),nrow(geneset.matrix),ncol(geneset.matrix))
+	for (i in 1:nrow(geneset.matrix)) {
+		for (j in 1:length(geneset.matrix[i,][geneset.matrix[i,]!='null'])) {
+			geneset.matrix.match.2[i,j]=match(geneset.matrix[i,j],dataset.genes,0)
+		}
+	}
+	geneset.hit.matrix=matrix(rep("null",times=nrow(geneset.matrix)*ncol(geneset.matrix)),nrow(geneset.matrix),ncol(geneset.matrix))
+	geneset.hit.vector=vector('character',length=nrow(geneset.matrix))
+	geneset.miss.matrix=matrix(rep("null",times=nrow(geneset.matrix)*ncol(geneset.matrix)),nrow(geneset.matrix),ncol(geneset.matrix))
+	geneset.miss.vector=vector('character',length=nrow(geneset.matrix))
+	geneset.hit.matrix[c(which(geneset.matrix.match.2>0))] = geneset.matrix[c(which(geneset.matrix.match.2>0))]
+	geneset.miss.matrix[c(which(geneset.matrix.match.2==0))] = geneset.matrix[c(which(geneset.matrix.match.2==0))]
+	for (i in 1:nrow(geneset.hit.matrix)) {
+		geneset.hit.vector[i] = paste(geneset.hit.matrix[i,geneset.hit.matrix[i,]!='null'],collapse=";")
+		geneset.miss.vector[i] = paste(geneset.miss.matrix[i,geneset.miss.matrix[i,]!='null'],collapse=";")
+	}
 	geneset.N=nrow(geneset.matrix)
 	geneset.names.2=vector(length = geneset.N, mode = "character")
 	geneset.descriptions.2=vector(length = geneset.N, mode = "character")
@@ -195,7 +211,7 @@ GSEA_lite_2 <- function(input.ds, gs.db, nperm = 1000, fdr.q.val.threshold = 0.1
 # Produce report and running enrichment plot for each gene set passing the FDR q-value cut-off
 
 	print("Producing result tables and plots")
-
+	
 	for (i in 1:geneset.N) {
 		if (FDR.mean.sorted[i] <= fdr.q.val.threshold) {
 
@@ -209,7 +225,6 @@ GSEA_lite_2 <- function(input.ds, gs.db, nperm = 1000, fdr.q.val.threshold = 0.1
 			gene.effect <- vector(length = geneset.sizes.2[i], mode = "numeric")
 			gene.RES <- vector(length = geneset.sizes.2[i], mode = "numeric")
 			rank.list <- seq(1, dataset.genes.N)
-		
 			if (obs.ES[i] >= 0) {
 				set.k <- seq(1, dataset.genes.N, 1)
 				loc <- match(i, obs.ES.index)
@@ -289,10 +304,12 @@ GSEA_lite_2 <- function(input.ds, gs.db, nperm = 1000, fdr.q.val.threshold = 0.1
 	obs.ES <- signif(obs.ES, digits=5)
 	obs.ES.norm <- signif(obs.ES.norm, digits=5)
 	FDR.mean.sorted <- signif(FDR.mean.sorted, digits=5)
+	hit.count <- rowSums(obs.indicator)
+	hit.percent <- hit.count/geneset.sizes.2
 
-	global.report <- data.frame(cbind(geneset.names.2, geneset.descriptions.2, geneset.sizes.2, obs.ES, obs.ES.norm, FDR.mean.sorted))
-	names(global.report) <- c("GENESET", "DESCRIPTION", "SIZE", "ES", "NES", "FDR Q-VAL")
-	global.report <- global.report[order(global.report[[6]]),]
+	global.report <- data.frame(cbind(geneset.names.2, geneset.descriptions.2, geneset.sizes.2, hit.count, hit.percent, geneset.hit.vector, geneset.miss.vector, obs.ES, obs.ES.norm, FDR.mean.sorted))
+	names(global.report) <- c("GENESET", "DESCRIPTION", "SIZE", "HIT#", "HIT%", "HITS", "MISSES", "ES", "NES", "FDR Q-VAL")
+	global.report <- global.report[order(global.report$"FDR Q-VAL"),]
 	if (output.directory != "")  {
 		global.filename <- paste(output.directory, doc.string, ".global.report.txt", sep="", collapse="")
 		write.table(global.report, file = global.filename, quote=F, row.names=F, sep = "\t")
