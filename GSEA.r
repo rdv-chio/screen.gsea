@@ -1,4 +1,4 @@
-GSEA = function(input, annotation_file, geneset_database, output.directory, pval_threshold = 1, fdr_threshold = .1, absolute_effects = "TRUE", effect_type = "mean", ES_type = "med", geneset_size_threshold = 3, nperm = 1000, weight = 1) {
+GSEA = function(input, annotation_file, geneset_database, output.directory, pval_threshold = 1, fdr_threshold = .1, absolute_effects = "TRUE", effect_type = "med", ES_type = "med", geneset_size_threshold = 3, nperm = 1000, weight = 1) {
 
 ## input: Input filename. Columns of input should be: shrna, gene, effect, pval.
 ## annotation_file: Current gene annotations for each hairpin. Columns should be: shrna, gene.
@@ -7,7 +7,7 @@ GSEA = function(input, annotation_file, geneset_database, output.directory, pval
 ## pval_threshold: Numeric 0-1. Hairpins with p-values greater than this threshold will be removed from the dataset.
 ## fdr_threshold: Numeric 0-1. Genesets with FDR values greater than this threshold will be excluded from summary plots.
 ## absolute_effects: Logical. If "TRUE", all effects will be converted to positive values. 
-## effect_type: "mean" or "max". Determines whether mean or maximum effect should be used for each gene.
+## effect_type: "med" or "max". Determines whether mean or median effect should be used for each gene.
 ## ES_type: "med" or "max". Determines whether the ES for a geneset is determined by the median or the maximum of the RES.
 ## geneset.size.threshold: Numeric. Genesets with fewer hits in the gene list than this threshold will be excluded from the analysis.
 ## nperm: Numeric. Determines the number of permutations to be performed during the FDR calculation.
@@ -35,60 +35,45 @@ GSEA = function(input, annotation_file, geneset_database, output.directory, pval
 	
 	data = data[data[[4]] <= pval_threshold,]
 	
-## Calculate mean effect for each gene
+## Calculate median and max effect for each gene
 
 	genes = unique(data[[2]])
-	mean.effects = vector('numeric', length(genes))
-	for(i in 1:length(genes)) {
-		effects = data[data[[2]] == genes[i],3]
-		mean.effects[i] = mean(effects)
-	}
-	if(absolute_effects == "TRUE") {
-		mean.effects = abs(mean.effects)
-	} else {
-	}
-		
-## Calculate max effect for each gene (genes with both positive and negative effects are removed)
-
-	both.indicator = vector('numeric', length(genes))
+	med.effects = vector('numeric', length(genes))
 	max.effects = vector('numeric', length(genes))
 	min.effects = vector('numeric', length(genes))
+	final.effects = vector('numeric', length(genes))
+	
 	for(i in 1:length(genes)) {
 		effects = data[data[[2]] == genes[i],3]
+		med.effects[i] = median(effects)
 		max.effects[i] = max(effects)
 		min.effects[i] = min(effects)
-		if(max(effects) > 0 & min(effects) < 0) {
-			both.indicator[i] = 1
-		}
 	}
-	new.genes = genes[both.indicator != 1]
-	new.max.effects = max.effects[both.indicator != 1]
-	new.min.effects = min.effects[both.indicator != 1]
-	abs.min.effects = abs(new.min.effects)
-	final.max.effects = vector('numeric', length(new.genes))
-	for(i in 1:length(final.max.effects)) {
-		if(new.max.effects[i] >= abs.min.effects[i]) {
-			final.max.effects[i] = new.max.effects[i]
-		} else if(absolute_effects == "TRUE") {
-			final.max.effects[i] = abs.min.effects[i]
-		} else {
-			final.max.effects[i] = new.min.effects[i]
-		}
-	}
+	abs.min.effects = abs(min.effects)
+	abs.med.effects = abs(med.effects)
 	
 ## Create genelist
-
-	if(effect_type == "mean") {
-		final.genes = genes
-		final.effects = mean.effects
-	} else if(effect_type == "max") {
-		final.genes = new.genes
-		final.effects = final.max.effects
+	
+	if(absolute_effects == "TRUE" & effect_type == 'med') {
+		final.effects = abs.med.effects
+	} else if(absolute_effects == "FALSE" & effect_type == 'med') {
+		final.effects = med.effects
+	} else if(effect_type == 'max') {
+		for(i in 1:length(final.effects)) {
+			if(max.effects[i] >= abs.min.effects[i]) {
+				final.effects[i] = max.effects[i]
+			} else if(absolute_effects == "TRUE") {
+				final.effects[i] = abs.min.effects[i]
+			} else {
+				final.effects[i] = min.effects[i]
+			}
+		}
 	} else {
 		stop("Invalid effect_type.")
 	}
+
 	final.effects[final.effects == 0] = min(final.effects[final.effects > 0])
-	genelist = data.frame(cbind(final.genes, final.effects), stringsAsFactors = F)
+	genelist = data.frame(cbind(genes, final.effects), stringsAsFactors = F)
 	genelist[[2]] = as.numeric(genelist[[2]])
 	colnames(genelist) = c('Gene', 'Effect')
 	genelist = genelist[order(genelist[[2]], decreasing = T),]
@@ -134,27 +119,27 @@ GSEA = function(input, annotation_file, geneset_database, output.directory, pval
 
 	print("Computing enrichment scores")
 	
-	obs.ES = vector(length = geneset.N.2, mode = "numeric")
-	obs.arg.ES = vector(length = geneset.N.2, mode = "numeric")
-	obs.RES = matrix(nrow = geneset.N.2, ncol = dataset.genes.N)
-	obs.indicator = matrix(nrow = geneset.N.2, ncol = dataset.genes.N)
-	perm.ES = matrix(nrow = geneset.N.2, ncol = nperm)
-
-	for(i in 1:geneset.N.2) {
-		geneset = geneset.matrix.2[i,geneset.matrix.2[i,] != "null"]
-		geneset.indexes = vector(length = length(geneset), mode = "numeric")
-		geneset.indexes = match(geneset, dataset.genes)
-		GSEA.results = GSEA_ES(gene.list = dataset.indexes, gene.set = geneset.indexes, weight = weight, correl.vector = dataset.effects, absolute_effects = absolute_effects)
-		obs.ES[i] = signif(GSEA.results$ES, 3)
-		obs.arg.ES[i] = GSEA.results$arg.ES
-		obs.RES[i,] = GSEA.results$RES
-		obs.indicator[i,] = GSEA.results$indicator
-		for(r in 1:nperm) {
-			new.dataset.indexes = sample(1:dataset.genes.N)
-			GSEA.results = GSEA_ES(gene.list = new.dataset.indexes, gene.set = geneset.indexes, weight = weight, correl.vector = dataset.effects, absolute_effects = absolute_effects)
-			perm.ES[i,r] = signif(GSEA.results$ES, 3)
+	perm.matrix = replicate(nperm, sample(1:dataset.genes.N))
+	perm.ES = matrix(NA, nrow = geneset.N.2, ncol = nperm)
+	correl.vector = abs(dataset.effects ** weight)
+	geneset.rows = lapply(split(geneset.matrix.2, row(geneset.matrix.2)), function(x) x[x != 'null'])
+	geneset.index.list = lapply(geneset.rows, match, table = dataset.genes)
+	obs.GSEA.results = lapply(geneset.index.list, GSEA_ES, gene.list = dataset.indexes, correl.vector = correl.vector, absolute_effects = absolute_effects, ES_type = ES_type)
+	obs.ES = sapply(obs.GSEA.results, "[[", 1)
+	obs.arg.ES = sapply(obs.GSEA.results, "[[", 2)
+	obs.RES = matrix(sapply(obs.GSEA.results, "[[", 3), nrow = geneset.N.2, ncol = length(dataset.indexes), byrow=T)
+	obs.indicator = matrix(sapply(obs.GSEA.results, "[[", 4), nrow = geneset.N.2, ncol = length(dataset.indexes), byrow=T)
+	if(ES_type == "max") {	
+		for(i in 1:geneset.N.2) {
+			perm.ES[i,] = sapply(split(perm.matrix, col(perm.matrix)), GSEA_ES_perm_max, geneset.index.list[[i]], correl.vector = correl.vector)
 		}
-	}
+	} else if(ES_type == 'med') {
+		for(i in 1:geneset.N.2) {
+			perm.ES[i,] = sapply(split(perm.matrix, col(perm.matrix)), GSEA_ES_perm_med, geneset.index.list[[i]], correl.vector = correl.vector)
+		}
+	} else {
+		stop("Invalid ES_type.")
+	} 
 	
 ## Normalize observed and permuted enrichment scores
 
@@ -165,8 +150,8 @@ GSEA = function(input, annotation_file, geneset_database, output.directory, pval
 	
 	for(i in 1:geneset.N.2) {
 		mean.perm.ES = mean(abs(as.numeric(perm.ES[i,])))
-		perm.ES.norm[i,] = signif(perm.ES[i,] / mean.perm.ES, 3)
-		obs.ES.norm[i] = signif(obs.ES[i] / mean.perm.ES, 3)
+		perm.ES.norm[i,] = perm.ES[i,] / mean.perm.ES
+		obs.ES.norm[i] = obs.ES[i] / mean.perm.ES
 	}
 
 ## Compute FDRs 
@@ -176,18 +161,17 @@ GSEA = function(input, annotation_file, geneset_database, output.directory, pval
 	FDR.ES = vector(length=geneset.N.2, mode="numeric")
 
 	for(i in 1:geneset.N.2) {
-			FDR.ES[i] = signif(sum(abs(perm.max.ES.norm[i,]) >= abs(obs.max.ES.norm[i])) / sum(abs(perm.max.ES.norm[i,]) >= 0), 3) # compute the fraction of ES scores larger than that observed for the original gene list across all permutations
+			FDR.ES[i] = sum(abs(perm.ES.norm[i,]) >= abs(obs.ES.norm[i])) / nperm # compute the fraction of ES scores larger than that observed for the original gene list across all permutations
 	}
 
-## Produce report and running enrichment plot for each gene set passing the FDR q-value cut-off
+## Produce geneset report and running enrichment plot for each gene set passing the FDR q-value cut-off
 
 	print("Producing result tables and plots")
 
-	time <- format(Sys.time(), "%Y_%m_%d_%H_%M_%S") 
-	for(i in 1:geneset.N.2) {
-		
-## Produce gene report
-		
+	time = format(Sys.time(), "%Y_%m_%d_%H_%M_%S") 
+	
+	for(i in 1:geneset.N.2) {	
+	
 		gene.number = vector(length = geneset.sizes.2[i], mode = "character")
 		gene.name = vector(length = geneset.sizes.2[i], mode = "character")
 		gene.list.loc = vector(length = geneset.sizes.2[i], mode = "numeric")
@@ -205,7 +189,7 @@ GSEA = function(input, annotation_file, geneset_database, output.directory, pval
 			order = seq(dataset.genes.N, 1, -1)
 		}
 		for(k in order) {
-			if(obs.indicator[i, k] == 1) {
+			if(obs.indicator[i,k] == 1) {
 				gene.number[kk] = kk
 				gene.name[kk] = dataset.genes[k]
 				gene.list.loc[kk] = k
@@ -224,10 +208,8 @@ GSEA = function(input, annotation_file, geneset_database, output.directory, pval
 		filename = paste(output.directory, time, '_', substring(geneset.names.2[i], 1, 40), ".txt", sep = "", collapse = "")
 		write.table(gene.report, file = filename, quote = F, row.names = F, sep = "\t")
 		
-## Produce running enrichment plot
-		
 		pdf.filename = paste(output.directory, time, '_', substring(geneset.names.2[i], 1, 40), ".pdf", sep = "", collapse = "")
-		pdf(file = pdf.filename, height = 6, width = 14)
+		pdf(file = pdf.filename, height = 6, width = 6)
 		ind = 1:dataset.genes.N
 		min.RES = min(obs.RES[i,])
 		max.RES = max(obs.RES[i,])
@@ -249,8 +231,8 @@ GSEA = function(input, annotation_file, geneset_database, output.directory, pval
 		lines(c(1, dataset.genes.N), c(0, 0), lwd = 1, lty = 2, cex = 1, col = 1) # zero RES line
 		lines(c(obs.arg.ES[i], obs.arg.ES[i]), c(min.plot, max.plot), lwd = 1, lty = 3, cex = 1, col = 2) # max enrichment vertical line
 		for(j in 1:dataset.genes.N) {
-			if(obs.indicator[i, j] == 1) {
-				lines(c(j, j), c(min.plot + 1.25 * delta, min.plot + 1.75 * delta), lwd = 1, lty = 1, cex = 1, col = 1)  # enrichment tags
+			if(obs.indicator[i,j] == 1) {
+				lines(c(j,j), c(min.plot + 1.25 * delta, min.plot + 1.75 * delta), lwd = 1, lty = 1, cex = 1, col = 1)  # enrichment tags
 			}
 		}
 		lines(ind, obs.correl.vector.norm, type = "l", lwd = 1, cex = 1, col = 1)
@@ -264,15 +246,9 @@ GSEA = function(input, annotation_file, geneset_database, output.directory, pval
 		dev.off()
 	}
 	
-## Produce global results report
+## Write parameters report
 
-	hit.count = rowSums(obs.indicator)
-	hit.percent = hit.count / geneset.sizes.2
-	global.report = data.frame(cbind(geneset.names.2, geneset.sizes.2, geneset.hit.vector.2, obs.ES, obs.ES.norm, FDR.ES),stringsAsFactors=F)
-	names(global.report) = c("GENESET NAME", "SIZE", 'GENES', "ES", "NES", "FDR")
-	global.report = global.report[order(global.report$"FDR"),]
-	class(global.report$"FDR") = 'numeric'
-	header = as.vector(c(
+	parameters = as.vector(c(
 		paste('input = ', input, sep = ''),
 		paste('annotation_file = ', annotation_file, sep = ''),
 		paste('geneset_database = ', geneset_database, sep = ''),
@@ -285,11 +261,23 @@ GSEA = function(input, annotation_file, geneset_database, output.directory, pval
 		paste('nperm = ',nperm,sep=''),
 		paste('weight = ',weight,sep=''),''),
 	mode = 'character')
+	parameters.filename = paste(output.directory, time, '_', "parameters.txt", sep = "", collapse = "")
+	writeLines(parameters, con = parameters.filename, sep = '\n')
+	
+## Write global results report
+
+	obs.ES = signif(obs.ES, 3)
+	obs.ES.norm = signif(obs.ES.norm, 3)
+	FDR.ES = signif(FDR.ES, 3)
+	
+	global.report = data.frame(cbind(geneset.names.2, geneset.sizes.2, geneset.hit.vector.2, obs.ES, obs.ES.norm, FDR.ES),stringsAsFactors=F)
+	names(global.report) = c("GENESET NAME", "SIZE", 'GENES', "ES", "NES", "FDR")
+	global.report = global.report[order(global.report$"FDR"),]
+	class(global.report$"FDR") = 'numeric'
 	global.filename = paste(output.directory, time, '_', "global_report.txt", sep = "", collapse = "")
-	writeLines(header, con = global.filename, sep = '\n')
 	write.table(global.report, file = global.filename, quote = F, row.names = F, sep = "\t", append = T)
 	
-## Produce summary histograms
+## Draw summary histograms
 
 	hits = global.report[global.report$"FDR" <= fdr_threshold, 1]
 	total = global.report[global.report$"FDR" <= 1, 1]
@@ -310,26 +298,67 @@ GSEA = function(input, annotation_file, geneset_database, output.directory, pval
 		total.vector = c(total.vector,total.matrix[i,])
 	}
 	hit.vector = hit.vector[hit.vector != 'null']
-	hit.table = table(hit.vector)
-	hit.table = hit.table[order(hit.table, decreasing = T)]
 	total.vector = total.vector[total.vector != 'null']
-	total.table = data.frame(table(total.vector))
+	hit.table = table(hit.vector)
+	total.table = table(total.vector)
 	denom.table = hit.table
 	effect.table = hit.table
 	for(i in 1:length(hit.table)) {
-		denom.table[i] = total.table[which(total.table[,1] == names(hit.table[i])),2]
+		denom.table[i] = total.table[which(names(total.table) == names(hit.table[i]))]
 		effect.table[i] = genelist[which(genelist[,1] == names(hit.table[i])),2]
 	}
-	hit.table = hit.table[order(effect.table, decreasing = T)]
-	denom.table = denom.table[order(effect.table, decreasing = T)]
-	effect.table = effect.table[order(effect.table, decreasing = T)]
-	ratio.table = hit.table / denom.table
+	p.table = denom.table / geneset.N.2
+	invp.table = 1 - p.table
+	pk.table = p.table ** hit.table
+	nk.table = length(hits) - hit.table
+	binomial.table = pk.table * invp.table ** nk.table
+	p.threshold = .05 / length(binomial.table)
+	delta = p.threshold - min(binomial.table)
+	order = order(binomial.table)
+	binomial.table = binomial.table[order]
+	effect.table = effect.table[order]
+	subset = which(binomial.table <= p.threshold + delta)
+	binomial.table = binomial.table[subset]
+	effect.table = effect.table[subset]
 	barplot.filename = paste(output.directory, time, '_', "histogram", ".pdf", sep = "", collapse = "")
-	pdf(file = barplot.filename, height = 14, width = 30)
+	pdf(file = barplot.filename, height = 14, width = length(binomial.table)/8)
 	par(mfcol = c(2,1), mar = c(5,4,4,2))
-	xpos = barplot(ratio.table[hit.table > 1], space = .5, cex.names = .8, las = 2, main = paste('Fraction of Genesets with FDR <= ', fdr_threshold, sep = ''))
-	text(x = xpos, y = ratio.table[hit.table > 1] + .1 * max(ratio.table[hit.table > 1]), labels = sub('0.', '.', round(ratio.table[hit.table > 1], 1)), xpd = TRUE, cex = .7)
-	barplot(effect.table[hit.table > 1], space = .5, cex.names = .8, las = 2, main = 'Effect Size')
-	text(x = xpos, y = effect.table[hit.table > 1] + .1 * max(effect.table[hit.table > 1]), labels = sub('0.', '.', round(effect.table[hit.table > 1], 1)), xpd = TRUE, cex = .7)
+	xpos = barplot(binomial.table, space = .5, cex.names = .8, axes = F, las = 2, ylim = c(min(binomial.table), p.threshold + delta), main = paste('Binomial Probability of N Genesets with FDR <= ', fdr_threshold, sep = ''))
+	abline(h = p.threshold)
+	axis(side = 1, line = 0, tick = F, labels = F)
+	axis(side = 2, line = 0)
+	barplot(effect.table, space = .5, cex.names = .8, axes = F, las = 2, main = 'Effect Size')
+	text(x = xpos, y = effect.table + .025 * max(effect.table), labels = sub('0.', '.', round(effect.table, 1)), xpd = TRUE, cex = .7)
+	axis(side = 1, line = 0, tick = F, labels = F)
+	axis(side = 2, line = 0)
 	dev.off()
+	
+## Draw summary heatmap
+
+	library(pheatmap)
+	heatmap.genes = names(binomial.table[binomial.table <= p.threshold])
+	heatmap.effects = effect.table[which(binomial.table <= p.threshold)]
+	hit.fdrs = global.report[global.report$"FDR" <= fdr_threshold, 6]
+	hit.fdrs[hit.fdrs == 0] = min(hit.fdrs[hit.fdrs > 0])
+	heatmap.fdrs = -log(hit.fdrs, 10)
+	corr.matrix = matrix(NA,nrow = nrow(hit.matrix), ncol = length(heatmap.genes))
+	for(i in 1:nrow(corr.matrix)) {
+			corr.matrix[i,] = sign(match(heatmap.genes,hit.matrix[i,],nomatch=0))
+	}
+	rownames(corr.matrix) = substring(hits, 1, 20)
+	colnames(corr.matrix) = heatmap.genes
+	for(i in 1:nrow(corr.matrix)) {
+		for(j in 1:ncol(corr.matrix)) {
+			corr.matrix[i,j] = corr.matrix[i,j] * heatmap.effects[j] * heatmap.fdrs[i]
+		}
+	}
+	corr.matrix[corr.matrix == 0] = NA
+	corr.matrix[!is.na(corr.matrix)] = log(corr.matrix[!is.na(corr.matrix)], 10)
+	corr.matrix[is.na(corr.matrix)] = min(corr.matrix[!is.na(corr.matrix)]) - 1
+	corr.matrix = corr.matrix - min(corr.matrix)
+	heatmap.filename = paste(output.directory, time, '_', 'heatmap', ".pdf", sep = "", collapse = "")
+	lower_limit = 0.9 * min(corr.matrix[corr.matrix > 0])
+	upper_limit = 1.1 * max(corr.matrix)
+	delta = upper_limit - lower_limit
+	pheatmap(corr.matrix, color = c('grey100', hsv(h = 0, s = seq(0,1,1/20), v = seq(1,.8,-.2/20))), breaks = c(0, seq(lower_limit, upper_limit, delta / 19)), border_color = 'grey50', treeheight_row = 0, treeheight_col = 0, legend = T, filename = heatmap.filename, height = length(hits) / 5, width = length(heatmap.genes) / 7)
 }

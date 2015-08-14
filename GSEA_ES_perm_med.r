@@ -1,4 +1,4 @@
-GSEA_ES <- function(gene.list, gene.set, correl.vector, absolute_effects = "TRUE", ES_type = 'med') {  
+GSEA_ES_perm_med <- function(gene.list, gene.set, correl.vector) {  
 
 # Inputs:
 #   gene.list: The ordered gene list (e.g. integers indicating the original position in the input dataset)  
@@ -20,34 +20,6 @@ GSEA_ES <- function(gene.list, gene.set, correl.vector, absolute_effects = "TRUE
 	norm.tag = 1.0 / sum(correl.vector[tag.indicator == 1]) # normalizing so that genesets with lots of hits dont have artificially high ES scores; sum(correl.vector*norm.tag)=1
 	norm.no.tag = 1.0 / Ndiff # if geneset is small compared to gene list, decay is slow. if geneset is large, decay is faster
 	RES = cumsum(tag.indicator * correl.vector * norm.tag - no.tag.indicator * norm.no.tag)
-	max.ES = max(RES)
-	arg.max.ES = which.max(RES)
-	min.ES = min(RES)
-	arg.min.ES = which.min(RES)
-	med.ES = median(RES[tag.indicator == 1])
-	arg.med.ES = median(which(tag.indicator == 1))
-	
-	if(absolute_effects == "TRUE") {
-		if(ES_type == "max") {
-			ES = max.ES
-			arg.ES = arg.max.ES
-		} else {
-			ES = med.ES
-			arg.ES = arg.med.ES
-		}
-	} else {
-		if(ES_type == "max") {
-			if (max.ES > -min.ES) {
-				ES = max.ES
-				arg.ES = arg.max.ES
-			} else {
-				ES = min.ES
-				arg.ES = arg.min.ES
-			} 
-		} else {
-			ES = med.ES
-			arg.ES = arg.med.ES
-		}
-	}
-	return(list(ES = ES, arg.ES = arg.ES, RES = RES, indicator = tag.indicator))
+	ES = median(RES[tag.indicator == 1])
+	return(ES)
 }
